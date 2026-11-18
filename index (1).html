@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chambre</title>
+<script>
+// Affiche les erreurs en bas de l'ecran (aide au depannage)
+window.addEventListener('error', function (e) {
+  var d = document.getElementById('erreur');
+  if (!d) { d = document.createElement('div'); d.id = 'erreur'; document.body.appendChild(d); }
+  d.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99;background:#b91c1c;color:#fff;padding:.6rem 1rem;font-size:1rem';
+  d.textContent = 'Erreur : ' + e.message + ' (ligne ' + e.lineno + ')';
+});
+</script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #000; color: #fff; font-family: system-ui, sans-serif; overflow: hidden; }
+
+  /* Photos en grand */
+  #photos { position: fixed; inset: 0; }
+  #photos img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 1.5s; }
+  #photos img.on { opacity: 1; }
+  #fond-vide { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1b2a49, #3a1c4a); font-size: 1.4rem; text-align: center; padding: 2rem; }
+
+  /* Horloge */
+  #horloge { position: fixed; left: 0; right: 0; bottom: 0; padding: 2rem 3rem; background: linear-gradient(transparent, rgba(0,0,0,.75)); }
+  #heure { font-size: 6rem; font-weight: 200; line-height: 1; }
+  #date { font-size: 1.6rem; opacity: .85; margin-top: .4rem; text-transform: capitalize; }
+
+  /* Barre d'ecoute en haut */
+  #barre { position: fixed; top: 0; left: 0; right: 0; padding: 1rem 2rem; background: rgba(20,20,30,.92); display: flex; align-items: center; gap: 1rem; transform: translateY(-100%); transition: transform .3s; z-index: 40; font-size: 1.4rem; }
+  #barre.visible { transform: translateY(0); }
+  .points { display: flex; gap: .4rem; }
+  .points span { width: .8rem; height: .8rem; border-radius: 50%; animation: saut 1s infinite; }
+  .points span:nth-child(1) { background: #4285f4; }
+  .points span:nth-child(2) { background: #ea4335; animation-delay: .15s; }
+  .points span:nth-child(3) { background: #fbbc05; animation-delay: .3s; }
+  .points span:nth-child(4) { background: #34a853; animation-delay: .45s; }
+  @keyframes saut { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-.6rem); } }
+
+  /* Reponse de l'assistant */
+  #reponse { position: fixed; left: 50%; top: 5.5rem; transform: translateX(-50%); width: min(90%, 52rem); background: rgba(20,20,30,.95); border-radius: 1.2rem; padding: 1.4rem 1.8rem; font-size: 1.5rem; line-height: 1.4; display: none; z-index: 45; }
+
+  /* Menu de boutons (apparait quand on appuie sur l'ecran) */
+  #menu { position: fixed; inset: 0; background: rgba(15,15,25,.96); padding: 2rem 3rem; display: none; z-index: 10; overflow-y: auto; }
+  #menu.visible { display: block; }
+  #menu h2 { font-weight: 300; font-size: 1.6rem; margin: 1rem 0 .8rem; opacity: .85; }
+  .grille { display: flex; flex-wrap: wrap; gap: 1.2rem; }
+  .tuile { position: relative; width: 11rem; height: 9rem; border-radius: 1.2rem; background: rgba(255,255,255,.1); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5rem; font-size: 1.3rem; cursor: pointer; user-select: none; }
+  .tuile .icone { font-size: 2.6rem; }
+  .tuile.allume { background: rgba(250,204,21,.3); }
+  .crayon { position: absolute; top: .4rem; right: .4rem; width: 2.4rem; height: 2.4rem; padding: 0; border-radius: 50%; font-size: 1.1rem; background: rgba(255,255,255,.22); }
+  button { background: #3b82f6; color: #fff; border: 0; border-radius: .7rem; padding: .7rem 1.2rem; font-size: 1.1rem; }
+  button.gris { background: rgba(255,255,255,.18); }
+
+  /* Fenetre des options d'un appareil */
+  #options { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(92%, 30rem); max-height: 88%; overflow-y: auto; background: rgba(25,25,38,.98); border-radius: 1.4rem; padding: 1.6rem; display: none; z-index: 35; }
+  #options h3 { font-weight: 400; font-size: 1.6rem; margin-bottom: 1rem; }
+  #options .ligne { display: flex; flex-wrap: wrap; gap: .7rem; margin-bottom: 1rem; }
+  #options p { opacity: .8; margin: .6rem 0 .4rem; }
+  .pastille { width: 3rem; height: 3rem; border-radius: 50%; border: 2px solid #fff; padding: 0; }
+  #options input[type=range] { width: 100%; }
+  .watts { font-size: 2.4rem; font-weight: 300; margin: .4rem 0 1rem; }
+
+  /* Choix musique : trois cases */
+  #musique { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(20,20,30,.97); border-radius: 1.4rem; padding: 2rem 2.4rem; display: none; z-index: 30; text-align: center; max-width: 92%; }
+  #musique h3 { font-weight: 400; margin-bottom: 1.2rem; font-size: 1.5rem; }
+  .choix { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; margin-bottom: 1.2rem; }
+  .choix label { display: flex; align-items: center; gap: .6rem; font-size: 1.4rem; padding: 1rem 1.3rem; background: rgba(255,255,255,.1); border-radius: 1rem; }
+  .choix input { width: 1.6rem; height: 1.6rem; }
+
+  /* Reglages */
+  #roue { position: fixed; top: 1rem; right: 1rem; z-index: 50; background: rgba(0,0,0,.35); border-radius: 50%; width: 3rem; height: 3rem; padding: 0; font-size: 1.4rem; }
+  #reglages { position: fixed; right: 1rem; top: 4.5rem; width: min(92%, 26rem); max-height: 80%; overflow-y: auto; background: rgba(20,20,30,.97); border-radius: 1rem; padding: 1.2rem; display: none; z-index: 50; }
+  #reglages label { display: block; margin: .5rem 0 .2rem; opacity: .8; }
+  input[type=text], input[type=password] { background: rgba(255,255,255,.1); color: #fff; border: 1px solid rgba(255,255,255,.25); border-radius: .6rem; padding: .7rem; font-size: 1.1rem; width: 100%; margin-bottom: .6rem; }
+</style>
+</head>
+<body>
+
+<div id="fond-vide">Appuie sur la roue en haut a droite, puis sur « Choisir mes photos ».</div>
+<div id="photos"></div>
+
+<div id="horloge"><div id="heure">--:--</div><div id="date"></div></div>
+
+<div id="barre"><div class="points"><span></span><span></span><span></span><span></span></div><div id="barre-texte">Oui, je vous ecoute</div></div>
+<div id="reponse"></div>
+
+<!-- Menu : musique et appareils -->
+<div id="menu">
+  <h2>Musique et videos</h2>
+  <div class="grille">
+    <div class="tuile" onclick="ouvrirService('youtube')"><div class="icone">&#9654;&#65039;</div>YouTube</div>
+    <div class="tuile" onclick="ouvrirService('spotify')"><div class="icone">&#127911;</div>Spotify</div>
+    <div class="tuile" onclick="ouvrirService('deezer')"><div class="icone">&#127926;</div>Deezer</div>
+  </div>
+
+  <h2>Appareils</h2>
+  <div class="grille">
+    <div class="tuile" id="t-lumiere" onclick="basculer('lumiere')">
+      <button class="crayon" onclick="event.stopPropagation(); ouvrirOptions('lumiere')">&#9999;&#65039;</button>
+      <div class="icone">&#128161;</div>Lumiere
+    </div>
+    <div class="tuile" id="t-prise" onclick="basculer('prise')">
+      <button class="crayon" onclick="event.stopPropagation(); ouvrirOptions('prise')">&#9999;&#65039;</button>
+      <div class="icone">&#128268;</div>Prise
+    </div>
+    <div class="tuile" id="t-xbox" onclick="basculer('xbox')">
+      <button class="crayon" onclick="event.stopPropagation(); ouvrirOptions('xbox')">&#9999;&#65039;</button>
+      <div class="icone">&#127918;</div>Xbox
+    </div>
+  </div>
+
+  <p style="margin-top:2rem"><button class="gris" onclick="fermerMenu()">Fermer</button></p>
+</div>
+
+<!-- Options d'un appareil (rempli par le script) -->
+<div id="options"></div>
+
+<div id="musique">
+  <h3 id="musique-titre">Sur quelle plateforme ?</h3>
+  <div class="choix">
+    <label><input type="checkbox" id="c-youtube" onchange="lancerMusique('youtube')"> YouTube</label>
+    <label><input type="checkbox" id="c-spotify" onchange="lancerMusique('spotify')"> Spotify</label>
+    <label><input type="checkbox" id="c-deezer" onchange="lancerMusique('deezer')"> Deezer</label>
+  </div>
+  <button class="gris" onclick="fermerMusique()">Annuler</button>
+</div>
+
+<button id="roue" onclick="basculerReglages()">&#9881;</button>
+<div id="reglages">
+  <label>Cle Gemini (gratuite)</label>
+  <input type="password" id="cle-gemini" placeholder="Colle ta cle ici">
+  <label>Mot d'activation</label>
+  <input type="text" id="mot-activation" placeholder="jarvis">
+  <label>Adresse du programme des appareils</label>
+  <input type="text" id="adresse-pont" placeholder="vide pour l'instant">
+  <button onclick="document.getElementById('choix-photos').click()">Choisir mes photos</button>
+  <input type="file" id="choix-photos" accept="image/*" multiple style="display:none">
+  <p style="margin-top:.8rem"><button onclick="sauverReglages()">Enregistrer</button></p>
+</div>
+
+<script>
+// ---------- Stockage sur la tablette ----------
+const lire = (cle, defaut) => { try { return JSON.parse(localStorage.getItem(cle)) ?? defaut; } catch (e) { return defaut; } };
+const ecrire = (cle, val) => { try { localStorage.setItem(cle, JSON.stringify(val)); } catch (e) {} };
+
+let reglages = Object.assign({ cle: '', mot: 'jarvis', pont: '' }, lire('reglages', {}));
+let etat = lire('etat', { lumiere: false, prise: false });
+
+// ---------- Heure et date ----------
+function majHorloge() {
+  const n = new Date();
+  document.getElementById('heure').textContent = n.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('date').textContent = n.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+majHorloge();
+setInterval(majHorloge, 15000);
+
+// ---------- Diaporama ----------
+let indexPhoto = 0;
+
+document.getElementById('choix-photos').addEventListener('change', (e) => {
+  const urls = Array.from(e.target.files).map(f => URL.createObjectURL(f));
+  indexPhoto = 0;
+  const conteneur = document.getElementById('photos');
+  conteneur.innerHTML = '';
+  urls.forEach((u) => { const im = document.createElement('img'); im.src = u; conteneur.appendChild(im); });
+  document.getElementById('fond-vide').style.display = urls.length ? 'none' : 'flex';
+  afficherPhoto();
+  document.getElementById('reglages').style.display = 'none';
+});
+
+function afficherPhoto() {
+  const imgs = document.querySelectorAll('#photos img');
+  imgs.forEach((im, i) => im.classList.toggle('on', i === indexPhoto));
+}
+setInterval(() => {
+  const imgs = document.querySelectorAll('#photos img');
+  if (imgs.length > 1) { indexPhoto = (indexPhoto + 1) % imgs.length; afficherPhoto(); }
+}, 12000);
+
+// ---------- Menu (un appui sur l'ecran) ----------
+function ouvrirMenu() { majTuiles(); document.getElementById('menu').classList.add('visible'); }
+function fermerMenu() { document.getElementById('menu').classList.remove('visible'); fermerOptions(); }
+['photos', 'horloge', 'fond-vide'].forEach((id) => document.getElementById(id).addEventListener('click', ouvrirMenu));
+
+function ouvrirService(nom) {
+  const adresses = { youtube: 'https://www.youtube.com', spotify: 'https://open.spotify.com', deezer: 'https://www.deezer.com' };
+  window.open(adresses[nom], '_blank');
+}
+
+// ---------- Appareils : lumiere, prise, Xbox ----------
+// Les ordres partent vers un petit programme sur la tablette (etape suivante).
+async function ordre(appareil, action, valeur) {
+  if (!reglages.pont) { montrerReponse("Les appareils ne sont pas encore connectés."); return null; }
+  try {
+    const r = await fetch(reglages.pont.replace(/\/$/, '') + '/ordre', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appareil, action, valeur })
+    });
+    return await r.json();
+  } catch (e) {
+    montrerReponse('Impossible de joindre le programme des appareils.');
+    return null;
+  }
+}
+
+async function basculer(appareil) {
+  if (appareil === 'xbox') { await ordre('xbox', 'allumer'); return; }
+  const nouveau = !etat[appareil];
+  const rep = await ordre(appareil, nouveau ? 'allumer' : 'eteindre');
+  if (rep) { etat[appareil] = nouveau; ecrire('etat', etat); majTuiles(); }
+}
+
+function majTuiles() {
+  document.getElementById('t-lumiere').classList.toggle('allume', !!etat.lumiere);
+  document.getElementById('t-prise').classList.toggle('allume', !!etat.prise);
+}
+
+// ---------- Fenetre d'options (le crayon) ----------
+const COULEURS = { rouge: '#ef4444', orange: '#f97316', jaune: '#facc15', vert: '#22c55e', bleu: '#3b82f6', violet: '#8b5cf6', rose: '#ec4899' };
+
+function fermerOptions() { document.getElementById('options').style.display = 'none'; }
+
+function ouvrirOptions(appareil) {
+  const o = document.getElementById('options');
+  let h = '';
+  if (appareil === 'lumiere') {
+    h += '<h3>Contrôler la lumière</h3>';
+    h += '<div class="ligne"><button onclick="commande(\'lumiere\',\'allumer\')">Allumer</button><button class="gris" onclick="commande(\'lumiere\',\'eteindre\')">Éteindre</button></div>';
+    h += '<p>Couleurs</p><div class="ligne">';
+    Object.keys(COULEURS).forEach((nom) => {
+      h += '<button class="pastille" style="background:' + COULEURS[nom] + '" onclick="envoyerCouleur(\'' + nom + '\')"></button>';
+    });
+    h += '</div><p>Blanc</p><div class="ligne"><button class="gris" onclick="envoyerBlanc(\'chaud\')">Blanc chaud</button><button class="gris" onclick="envoyerBlanc(\'froid\')">Blanc froid</button></div>';
+    h += '<p>Luminosité</p><input type="range" min="1" max="100" value="60" onchange="ordre(\'lumiere\',\'luminosite\',this.value)">';
+  } else if (appareil === 'prise') {
+    h += '<h3>Prise connectée</h3>';
+    h += '<div class="ligne"><button onclick="commande(\'prise\',\'allumer\')">Allumer</button><button class="gris" onclick="commande(\'prise\',\'eteindre\')">Éteindre</button></div>';
+    h += '<p>Consommation</p><div class="watts" id="watts">-- W</div><button onclick="lireWatts()">Actualiser</button>';
+  } else {
+    h += '<h3>Xbox</h3>';
+    h += '<div class="ligne"><button onclick="ordre(\'xbox\',\'allumer\')">Allumer</button><button class="gris" onclick="ordre(\'xbox\',\'eteindre\')">Éteindre</button></div>';
+  }
+  h += '<p style="margin-top:1rem"><button class="gris" onclick="fermerOptions()">Fermer</button></p>';
+  o.innerHTML = h;
+  o.style.display = 'block';
+}
+
+async function commande(appareil, action) {
+  const rep = await ordre(appareil, action);
+  if (rep && etat[appareil] !== undefined) { etat[appareil] = (action === 'allumer'); ecrire('etat', etat); majTuiles(); }
+}
+function envoyerCouleur(nom) { ordre('lumiere', 'couleur', nom); }
+function envoyerBlanc(type) { ordre('lumiere', 'blanc', type); }
+async function lireWatts() {
+  const rep = await ordre('prise', 'consommation');
+  if (rep && rep.watts !== undefined) document.getElementById('watts').textContent = rep.watts + ' W';
+}
+
+// ---------- Reglages ----------
+function basculerReglages() {
+  const r = document.getElementById('reglages');
+  r.style.display = r.style.display === 'block' ? 'none' : 'block';
+  document.getElementById('cle-gemini').value = reglages.cle;
+  document.getElementById('mot-activation').value = reglages.mot;
+  document.getElementById('adresse-pont').value = reglages.pont;
+}
+function sauverReglages() {
+  reglages.cle = document.getElementById('cle-gemini').value.trim();
+  reglages.mot = (document.getElementById('mot-activation').value.trim() || 'jarvis').toLowerCase();
+  reglages.pont = document.getElementById('adresse-pont').value.trim();
+  ecrire('reglages', reglages);
+  document.getElementById('reglages').style.display = 'none';
+}
+
+// ---------- Voix : ecoute en continu du mot d'activation ----------
+const Reco = window.SpeechRecognition || window.webkitSpeechRecognition;
+let reco = null;
+let modeCommande = false;      // false = on attend le mot d'activation
+let attenteMusique = null;     // titre en attente du choix de plateforme
+let minuteurSilence = null;
+
+function parler(texte, apres) {
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(texte);
+    u.lang = 'fr-FR';
+    u.onend = () => { if (apres) apres(); };
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+
+function montrerBarre(texte) {
+  document.getElementById('barre-texte').textContent = texte;
+  document.getElementById('barre').classList.add('visible');
+}
+function cacherBarre() {
+  document.getElementById('barre').classList.remove('visible');
+  document.getElementById('reponse').style.display = 'none';
+}
+function montrerReponse(texte) {
+  const r = document.getElementById('reponse');
+  r.textContent = texte;
+  r.style.display = 'block';
+}
+
+function demarrerEcoute() {
+  if (!Reco) { montrerReponse('Ce navigateur ne gère pas la reconnaissance vocale. Utilise Chrome.'); return; }
+  reco = new Reco();
+  reco.lang = 'fr-FR';
+  reco.continuous = true;
+  reco.interimResults = false;
+  reco.onresult = (ev) => {
+    const dernier = ev.results[ev.results.length - 1];
+    traiterPhrase(dernier[0].transcript.trim().toLowerCase());
+  };
+  // Chrome coupe l'ecoute de temps en temps : on la relance
+  reco.onend = () => setTimeout(() => { try { reco.start(); } catch (e) {} }, 300);
+  reco.onerror = () => {};
+  try { reco.start(); } catch (e) {}
+}
+
+// Le micro ne demarre qu'apres un premier appui (regle de Chrome)
+document.body.addEventListener('click', () => { if (!reco) demarrerEcoute(); }, { once: true });
+
+function traiterPhrase(phrase) {
+  if (!modeCommande) {
+    const mot = reglages.mot;
+    if (phrase.includes(mot)) {
+      activer();
+      // Si la commande suit directement le mot d'activation (« Jarvis allume la lumiere »)
+      const reste = phrase.split(mot).slice(1).join(mot).trim();
+      if (reste.length > 2) executer(reste);
+    }
+    return;
+  }
+  executer(phrase);
+}
+
+function activer() {
+  modeCommande = true;
+  montrerBarre('Oui, je vous ecoute');
+  parler('Oui, je vous écoute');
+  clearTimeout(minuteurSilence);
+  minuteurSilence = setTimeout(desactiver, 12000);
+}
+function desactiver() {
+  modeCommande = false;
+  cacherBarre();
+}
+
+// ---------- Commandes des appareils ----------
+const COULEURS_VOIX = { rouge: 'rouge', orange: 'orange', jaune: 'jaune', vert: 'vert', verte: 'vert', bleu: 'bleu', bleue: 'bleu', violet: 'violet', violette: 'violet', rose: 'rose' };
+
+async function faire(appareil, action, valeur) {
+  const rep = await ordre(appareil, action, valeur);
+  if (rep) {
+    if (etat[appareil] !== undefined && (action === 'allumer' || action === 'eteindre')) {
+      etat[appareil] = (action === 'allumer'); ecrire('etat', etat); majTuiles();
+    }
+    montrerBarre('C\'est fait'); parler('C\'est fait');
+  } else {
+    parler('Je n\'arrive pas à joindre les appareils.');
+  }
+}
+async function consoVocale() {
+  const rep = await ordre('prise', 'consommation');
+  if (rep && rep.watts !== undefined) {
+    const t = 'La prise consomme ' + rep.watts + ' watts.';
+    montrerReponse(t); parler(t);
+  }
+}
+
+function commandeAppareil(phrase) {
+  const eteint = /[ée]teins|[ée]teindre|coupe/.test(phrase);
+  const allume = /allume|allumer|active/.test(phrase);
+
+  if (/xbox/.test(phrase)) {
+    if (eteint) { faire('xbox', 'eteindre'); return true; }
+    if (allume) { faire('xbox', 'allumer'); return true; }
+  }
+  if (/lumi[eè]re|lampe/.test(phrase)) {
+    if (/blanc chaud/.test(phrase)) { faire('lumiere', 'blanc', 'chaud'); return true; }
+    if (/blanc froid/.test(phrase)) { faire('lumiere', 'blanc', 'froid'); return true; }
+    for (const mot in COULEURS_VOIX) {
+      if (phrase.includes(mot)) { faire('lumiere', 'couleur', COULEURS_VOIX[mot]); return true; }
+    }
+    if (eteint) { faire('lumiere', 'eteindre'); return true; }
+    if (allume) { faire('lumiere', 'allumer'); return true; }
+  }
+  if (/prise/.test(phrase)) {
+    if (/consommation|watt/.test(phrase)) { consoVocale(); return true; }
+    if (eteint) { faire('prise', 'eteindre'); return true; }
+    if (allume) { faire('prise', 'allumer'); return true; }
+  }
+  return false;
+}
+
+// ---------- Commandes ----------
+function executer(phrase) {
+  clearTimeout(minuteurSilence);
+  minuteurSilence = setTimeout(desactiver, 15000);
+
+  // Reponse a la question « quelle plateforme ? »
+  if (attenteMusique) {
+    if (phrase.includes('youtube')) { lancerMusique('youtube'); return; }
+    if (phrase.includes('spotify')) { lancerMusique('spotify'); return; }
+    if (phrase.includes('deezer') || phrase.includes('dizeur')) { lancerMusique('deezer'); return; }
+  }
+
+  if (/(ferme|cache|retour|accueil)/.test(phrase)) { fermerMenu(); fermerMusique(); desactiver(); return; }
+  if (/(menu|boutons|appareils)/.test(phrase)) { ouvrirMenu(); montrerBarre('Voici le menu'); parler('Voici le menu'); return; }
+
+  if (commandeAppareil(phrase)) return;
+
+  const ouvre = phrase.match(/^(?:ouvre|lance)\s+(youtube|spotify|deezer)$/);
+  if (ouvre) { ouvrirService(ouvre[1]); return; }
+
+  const m = phrase.match(/(?:mets|met|joue|lance|écouter|ecouter)\s+(?:de la musique\s+)?(?:de\s+|du\s+|la chanson\s+|le titre\s+)?(.+)/);
+  if (m) {
+    const sur = m[1].match(/\s+sur\s+(youtube|spotify|deezer)$/);
+    const titre = m[1].replace(/\s+sur\s+(youtube|spotify|deezer)$/, '');
+    if (sur) { attenteMusique = titre; lancerMusique(sur[1]); } else { demanderPlateforme(titre); }
+    return;
+  }
+
+  if (/^(merci|c'est bon|stop|arrête|arrete)/.test(phrase)) { desactiver(); return; }
+
+  poserQuestionIA(phrase);
+}
+
+// ---------- Musique : YouTube, Spotify ou Deezer ----------
+function demanderPlateforme(texte) {
+  attenteMusique = texte;
+  ['c-youtube', 'c-spotify', 'c-deezer'].forEach((id) => { document.getElementById(id).checked = false; });
+  document.getElementById('musique-titre').textContent = 'Mettre « ' + texte + ' » sur quelle plateforme ?';
+  document.getElementById('musique').style.display = 'block';
+  montrerBarre('YouTube, Spotify ou Deezer ?');
+  parler('Sur YouTube, Spotify ou Deezer ?');
+}
+function fermerMusique() {
+  attenteMusique = null;
+  document.getElementById('musique').style.display = 'none';
+}
+function lancerMusique(plateforme) {
+  if (!attenteMusique) return;
+  const q = encodeURIComponent(attenteMusique);
+  const adresses = {
+    youtube: 'https://www.youtube.com/results?search_query=' + q,
+    spotify: 'https://open.spotify.com/search/' + q,
+    deezer: 'https://www.deezer.com/search/' + q
+  };
+  const noms = { youtube: 'YouTube', spotify: 'Spotify', deezer: 'Deezer' };
+  const adresse = adresses[plateforme];
+  fermerMusique();
+  parler('Je cherche ça sur ' + noms[plateforme]);
+  window.open(adresse, '_blank');
+}
+
+// ---------- IA gratuite : Google Gemini ----------
+async function poserQuestionIA(question) {
+  if (!reglages.cle) {
+    const msg = 'Il me faut une clé Gemini gratuite. Ouvre les réglages avec la roue dentée.';
+    montrerReponse(msg); parler(msg); return;
+  }
+  montrerBarre('Je réfléchis...');
+  try {
+    const rep = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=' + encodeURIComponent(reglages.cle), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: 'Tu es un assistant personnel pour une chambre. Reponds en francais, en une ou deux phrases courtes, sans mise en forme.' }] },
+        contents: [{ role: 'user', parts: [{ text: question }] }]
+      })
+    });
+    const data = await rep.json();
+    const texte = data?.candidates?.[0]?.content?.parts?.[0]?.text || ('Pas de réponse : ' + (data?.error?.message || 'inconnue'));
+    montrerReponse(texte);
+    montrerBarre('Je vous écoute');
+    parler(texte);
+  } catch (e) {
+    const msg = 'Je n\'arrive pas à joindre l\'intelligence artificielle.';
+    montrerReponse(msg); parler(msg);
+  }
+}
+
+// ---------- Ecran toujours allume ----------
+async function garderEcranAllume() {
+  try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+garderEcranAllume();
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') garderEcranAllume(); });
+</script>
+</body>
+</html>
